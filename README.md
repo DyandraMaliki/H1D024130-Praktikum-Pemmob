@@ -5,4 +5,4 @@
 * Shift Awal & Baru : B / H
 
 ### Display Pertemuan 1
-(./images/gambar1.jpeg)
+![Tampilan Aplikasi](./images/gambar1.jpeg)
