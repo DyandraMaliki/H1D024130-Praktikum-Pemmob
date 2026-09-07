@@ -1,4 +1,8 @@
-Nama    : Mohammad Dyandra Maliki
-NIM     : H1D024130
-Shift Awal  :B
-Shift Akhir :H
+## Identitas
+
+* Nama : Mohammad Dyandra Maliki
+* NIM : H1D024130
+* Shift Awal & Baru : B / H
+
+### Display Pertemuan 1
+(./images/gambar1.jpeg)
