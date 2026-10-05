@@ -1,8 +1,6 @@
 package com.pemmob.dyandra.ui.screen
 
-import android.content.res.Configuration
 import android.widget.Toast
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -25,61 +23,186 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.pemmob.dyandra.R
-import com.pemmob.dyandra.data.dummy.DummyData
 import com.pemmob.dyandra.data.model.Category
 import com.pemmob.dyandra.data.model.Product
-import com.pemmob.dyandra.ui.theme.JualanTheme
-import kotlinx.coroutines.delay
+import com.pemmob.dyandra.util.JualanConstants.BASE_URL
+import com.pemmob.dyandra.viewmodel.ProductUiState
+import com.pemmob.dyandra.viewmodel.ProductViewModel
+
+@Composable
+fun ProductItemCard(product: Product, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .padding(8.dp)
+            .fillMaxWidth()
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            val imageModel: Any = if (product.img == "dummy_product") {
+                R.drawable.dummy_product
+            } else {
+                "${BASE_URL}img/${product.img}"
+            }
+
+            Box(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                AsyncImage(
+                    model = imageModel,
+                    contentDescription = product.name,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(size = 8.dp))
+                        .background(color = Color.White),
+                    contentScale = ContentScale.Fit
+                )
+
+                if (product.category != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text(
+                            text = product.category.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = product.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Rp ${if (product.price % 1.0 == 0.0) product.price.toInt().toString() else product.price.toString()}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = "Stok: ${product.stock}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun CategoryItem(
+    category: Category,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Card(
+        modifier = Modifier.clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        )
+    ) {
+        Text(
+            text = category.name,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DaftarProdukScreen(navController: NavController? = null) {
-    val context = LocalContext.current
-    var selectedCategoryId by rememberSaveable { mutableStateOf(DummyData.categories.firstOrNull()?.id) }
+fun DaftarProdukScreen(
+    navController: NavController? = null,
+    viewModel: ProductViewModel
+) {
+    var selectedCategoryId by rememberSaveable { mutableStateOf<Int?>(value = null) }
+    val uiState by viewModel.uiState.collectAsState()
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var filteredProducts by remember { mutableStateOf <List<Product>>(emptyList()) }
 
-    LaunchedEffect(key1 = selectedCategoryId, key2 = searchQuery) {
-        isLoading = true
-        delay(1000)
-
-        val filteredByCategory = if (selectedCategoryId != null) {
-            DummyData.products.filter { it.category_id == selectedCategoryId }
-        } else {
-            DummyData.products
+    when (val state = uiState) {
+        is ProductUiState.Loading -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
         }
-
-        filteredProducts = if (searchQuery.isBlank()) {
-            filteredByCategory
-        } else {
-            filteredByCategory.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        is ProductUiState.Error -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Error: ${state.message}",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
         }
-        isLoading = false
+        is ProductUiState.Success -> {
+            if (selectedCategoryId == null && state.categories.isNotEmpty()) {
+                selectedCategoryId = state.categories.first().id
+            }
+
+            val filteredByCategory = if (selectedCategoryId != null) {
+                state.products.filter { it.category_id == selectedCategoryId }
+            } else {
+                state.products
+            }
+
+            val filteredProducts = if (searchQuery.isBlank()) {
+                filteredByCategory
+            } else {
+                filteredByCategory.filter {
+                    it.name.contains(other = searchQuery, ignoreCase = true)
+                }
+            }
+
+            StatelessDaftarProduct(
+                categories = state.categories,
+                selectedCategoryId = selectedCategoryId,
+                onCategorySelected = { selectedCategoryId = it },
+                searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
+                isLoading = false,
+                products = filteredProducts,
+                onProductClick = { product ->
+                    navController?.navigate("detail/${product.id}")
+                },
+                onContactUsClick = {
+                    navController?.navigate("hubungi_kami")
+                }
+            )
+        }
     }
-
-    StatelessDaftarProduct(
-        categories = DummyData.categories,
-        selectedCategoryId = selectedCategoryId,
-        onCategorySelected = { selectedCategoryId = it },
-        searchQuery = searchQuery,
-        onSearchQueryChange = { searchQuery = it },
-        isLoading = isLoading,
-        products = filteredProducts,
-        onProductClick = { product ->
-            navController?.navigate(route = "detail/${product.id}")
-        },
-        onContactUsClick = {
-            navController?.navigate(route = "hubungi_kami")
-        }
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,24 +218,30 @@ fun StatelessDaftarProduct(
     onProductClick: (Product) -> Unit,
     onContactUsClick: () -> Unit
 ) {
+    val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Daftar Produk UMKM") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-                ),
+                title = {
+                    Text(
+                        text = "Daftar Produk UMKM",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 actions = {
-                    IconButton(onClick = { }) {
+                    IconButton(onClick = {
+                        Toast.makeText(context, "Keranjang Belanja", Toast.LENGTH_SHORT).show()
+                    }) {
                         Icon(
                             imageVector = Icons.Default.ShoppingCart,
-                            contentDescription = "Keranjang"
+                            contentDescription = "Keranjang",
+                            tint = Color.White
                         )
                     }
+
                     IconButton(onClick = { expanded = true }) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
@@ -120,6 +249,7 @@ fun StatelessDaftarProduct(
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
+
                     DropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
@@ -138,7 +268,10 @@ fun StatelessDaftarProduct(
                             }
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             )
         }
     ) { paddingValues ->
@@ -185,7 +318,10 @@ fun StatelessDaftarProduct(
             )
 
             if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(8.dp))
@@ -194,147 +330,29 @@ fun StatelessDaftarProduct(
                 }
             } else {
                 if (products.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text("Produk tidak ditemukan.")
                     }
                 } else {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(count = 2),
-                        contentPadding = PaddingValues(all = 16.dp),
+                        columns = GridCells.Fixed(2),
+                        contentPadding = PaddingValues(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(products) { product ->
-                            ProductItemCard(product = product) {
-                                onProductClick(product)
-                            }
+                            ProductItemCard(
+                                product = product,
+                                onClick = { onProductClick(product) }
+                            )
                         }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun CategoryItem(
-    category: Category,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Card(
-        modifier = Modifier.clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        )
-    ) {
-        Text(
-            text = category.name,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
-fun ProductItemCard(product: Product, onClick: () -> Unit) {
-    val imageRes = if (product.img == "dummy_product") R.drawable.dummy_product else R.drawable.dummy_product
-
-    Card(
-        modifier = Modifier
-            .padding(all = 8.dp)
-            .fillMaxWidth()
-            .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Box {
-                Image(
-                    painter = painterResource(id = imageRes),
-                    contentDescription = product.name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White),
-                    contentScale = ContentScale.Fit
-                )
-
-                if (product.category != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(all = 4.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.secondary)
-                    ) {
-                        Text(
-                            text = product.category.name,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondary,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = product.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = "Rp ${product.price.toInt()}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewProduct() {
-    JualanTheme {
-        ProductItemCard(product = DummyData.products[0], onClick = {})
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewCategory() {
-    JualanTheme {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CategoryItem(
-                category = DummyData.categories[0],
-                isSelected = true,
-                onClick = {}
-            )
-        }
-    }
-}
-
-@Preview(name = "Light Mode", showBackground = true)
-@Preview(name = "Dark Mode", uiMode = Configuration.UI_MODE_NIGHT_YES, showBackground = true)
-@Composable
-fun PreviewDaftarProduk() {
-    JualanTheme {
-        DaftarProdukScreen()
     }
 }
